@@ -8,7 +8,7 @@ app.use(express.json());
 const RPC_PROVIDER_URL = process.env.RPC_PROVIDER_URL;
 const RPC_PORT = process.env.RPC_PORT || 8545;
 const RPC_HOST = process.env.RPC_HOST || 'localhost';
-const MAX_BLOCK_RANGE = parseInt(process.env.MAX_BLOCK_RANGE || 50000);
+const MAX_BLOCK_RANGE = parseInt(process.env.MAX_BLOCK_RANGE || 10000);
 
 // Function to check if the RPC call is a filter call and if it exceeds the MAX_BLOCK_RANGE
 const isFilterExceedingRange = (payload) => {

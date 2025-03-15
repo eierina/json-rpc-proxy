@@ -5,7 +5,7 @@ A simple RPC proxy server that transparently forwards JSON-RPC requests to an Et
 ## Features
 
 - Proxies JSON-RPC requests from `http://localhost:PORT` to `https://some.rpc.provider.com`
-- Automatically batches filter calls (like `eth_getLogs`) that exceed a maximum block range (default: 50000 blocks)
+- Automatically batches filter calls (like `eth_getLogs`) that exceed a maximum block range (default: 10000 blocks)
 - Supports both single RPC calls and batch requests
 
 ## Installation
@@ -20,7 +20,7 @@ A simple RPC proxy server that transparently forwards JSON-RPC requests to an Et
    RPC_PROVIDER_URL=https://your.rpc.provider.com
    RPC_PORT=8545
    RPC_HOST=localhost
-   MAX_BLOCK_RANGE=50000
+   MAX_BLOCK_RANGE=10000
    ```
 
 ## Usage
