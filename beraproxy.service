@@ -1,0 +1,12 @@
+[Unit]
+Description=beraproxy
+After=network-online.target
+Requires=network-online.target
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/beraproxy
+ExecStart=/bin/bash -lc "npm start"
+Restart=always
+[Install]
+WantedBy=multi-user.target
