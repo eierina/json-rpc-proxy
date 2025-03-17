@@ -10,6 +10,43 @@ const RPC_PORT = process.env.RPC_PORT || 8545;
 const RPC_HOST = process.env.RPC_HOST || 'localhost';
 const MAX_BLOCK_RANGE = parseInt(process.env.MAX_BLOCK_RANGE || 10000);
 
+// Rate limiting configuration
+const MAX_REQUESTS_PER_MINUTE = parseInt(process.env.MAX_REQUESTS_PER_MINUTE || 2000); // Maximum requests per minute
+const SAFE_MARGIN = 0.9; // 90% of the max to provide a safety buffer
+const RATE_LIMIT = Math.floor(MAX_REQUESTS_PER_MINUTE * SAFE_MARGIN); // Target rate limit
+const MINUTE_IN_MS = 60 * 1000;
+const TOKEN_REFILL_INTERVAL_MS = MINUTE_IN_MS / RATE_LIMIT; // Time to add a new token
+
+// Token bucket implementation
+let tokenBucket = {
+  tokens: RATE_LIMIT, // Start with full bucket
+  lastRefill: Date.now(),
+  
+  // Get token and delay if necessary
+  async getToken() {
+    // Refill tokens based on elapsed time
+    const now = Date.now();
+    const timeSinceLastRefill = now - this.lastRefill;
+    const tokensToAdd = Math.floor(timeSinceLastRefill / TOKEN_REFILL_INTERVAL_MS);
+    
+    if (tokensToAdd > 0) {
+      this.tokens = Math.min(RATE_LIMIT, this.tokens + tokensToAdd);
+      this.lastRefill = now - (timeSinceLastRefill % TOKEN_REFILL_INTERVAL_MS);
+    }
+    
+    if (this.tokens >= 1) {
+      // Token available, consume it
+      this.tokens -= 1;
+      return Promise.resolve();
+    } else {
+      // No tokens available, calculate delay needed
+      const delayMs = TOKEN_REFILL_INTERVAL_MS - (now - this.lastRefill);
+      console.log(`Rate limiting applied: delaying request by ${delayMs}ms`);
+      return new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+};
+
 // Function to check if the RPC call is a filter call and if it exceeds the MAX_BLOCK_RANGE
 const isFilterExceedingRange = (payload) => {
   if (!payload.method || !payload.params) return false;
@@ -43,6 +80,9 @@ const getCurrentBlockNumber = async () => {
       method: "eth_blockNumber",
       params: []
     };
+    
+    // Apply rate limiting before making the request
+    await tokenBucket.getToken();
     
     const response = await axios.post(RPC_PROVIDER_URL, blockNumberPayload);
     if (response.data && response.data.result) {
@@ -90,6 +130,9 @@ const batchFilterCall = async (payload) => {
       };
       
       try {
+        // Apply rate limiting before making the request
+        await tokenBucket.getToken();
+        
         const response = await axios.post(RPC_PROVIDER_URL, batchPayload);
         if (response.data.result) {
           results = results.concat(response.data.result);
@@ -119,10 +162,16 @@ const batchFilterCall = async (payload) => {
         }]
       };
       
+      // Apply rate limiting before making the request
+      await tokenBucket.getToken();
+      
       const response = await axios.post(RPC_PROVIDER_URL, modifiedPayload);
       return response.data;
     } else {
       // Original request is fine
+      // Apply rate limiting before making the request
+      await tokenBucket.getToken();
+      
       const response = await axios.post(RPC_PROVIDER_URL, payload);
       return response.data;
     }
@@ -139,6 +188,9 @@ app.post('/', async (req, res) => {
       return res.json(batchedResult);
     } else {
       try {
+        // Apply rate limiting before making the request
+        await tokenBucket.getToken();
+        
         const response = await axios.post(RPC_PROVIDER_URL, payload);
         return res.json(response.data);
       } catch (error) {
@@ -181,6 +233,9 @@ app.post('/batch', async (req, res) => {
         results.push(batchedResult);
       } else {
         try {
+          // Apply rate limiting before making the request
+          await tokenBucket.getToken();
+          
           const response = await axios.post(RPC_PROVIDER_URL, payload);
           results.push(response.data);
         } catch (error) {
@@ -219,4 +274,6 @@ app.listen(RPC_PORT, RPC_HOST, () => {
   console.log(`RPC Proxy running at http://${RPC_HOST}:${RPC_PORT}`);
   console.log(`Forwarding requests to: ${RPC_PROVIDER_URL}`);
   console.log(`Max block range for filter calls: ${MAX_BLOCK_RANGE}`);
+  console.log(`Rate limiting enabled: max ${RATE_LIMIT} requests/minute (${Math.round(RATE_LIMIT / 60)} requests/second)`);
+  console.log(`Token refill interval: ${Math.round(TOKEN_REFILL_INTERVAL_MS)} ms`);
 });
